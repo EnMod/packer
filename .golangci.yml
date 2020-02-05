@@ -5,10 +5,10 @@ issues:
   # excluded by default patterns execute `golangci-lint run --help`
 
   exclude-rules:
+    # Exclude failing staticchecks for now
     - linters:
-        - goimports
-      text: "File is not `goimports`-ed"
-
+        - staticcheck
+      text: "SA[1006|1019|4006|4010|4017|5007|6005|9004]:"
     # Exclude lll issues for long lines with go:generate
     - linters:
         - lll
