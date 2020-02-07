@@ -31,7 +31,7 @@ linters:
     #- errcheck
     - gofmt
     - goimports
-    - gosimple
+    #- gosimple
     - govet
     - ineffassign
     - staticcheck
