@@ -5,6 +5,10 @@ issues:
   # excluded by default patterns execute `golangci-lint run --help`
 
   exclude-rules:
+    # Exclude gosimple bool check
+    - linters:
+      - gosimple
+      text: "S(1002|1008|1021)"
     # Exclude failing staticchecks for now
     - linters:
         - staticcheck
@@ -24,7 +28,7 @@ linters:
   disable-all: true
   enable:
     - deadcode
-    - errcheck
+    #- errcheck
     - gofmt
     - goimports
     - gosimple
