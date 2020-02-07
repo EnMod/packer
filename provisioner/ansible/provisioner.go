@@ -32,7 +32,6 @@ import (
 	"github.com/hashicorp/packer/common"
 	"github.com/hashicorp/packer/common/adapter"
 	"github.com/hashicorp/packer/helper/config"
-	confighelper "github.com/hashicorp/packer/helper/config"
 	"github.com/hashicorp/packer/packer"
 	"github.com/hashicorp/packer/packer/tmp"
 	"github.com/hashicorp/packer/template/interpolate"
@@ -69,7 +68,7 @@ type Config struct {
 	GalaxyForceInstall   bool     `mapstructure:"galaxy_force_install"`
 	RolesPath            string   `mapstructure:"roles_path"`
 	//TODO: change default to false in v1.6.0.
-	UseProxy confighelper.Trilean `mapstructure:"use_proxy"`
+	UseProxy config.Trilean `mapstructure:"use_proxy"`
 }
 
 type Provisioner struct {
@@ -80,7 +79,7 @@ type Provisioner struct {
 	ansibleMajVersion uint
 	generatedData     map[string]interface{}
 
-	setupAdapterFunc   func(ui packer.Ui, comm packer.Communicator) (error, string)
+	setupAdapterFunc   func(ui packer.Ui, comm packer.Communicator) (string, error)
 	executeAnsibleFunc func(ui packer.Ui, comm packer.Communicator, privKeyFile string) error
 }
 
@@ -223,17 +222,17 @@ func (p *Provisioner) getVersion() error {
 	return nil
 }
 
-func (p *Provisioner) setupAdapter(ui packer.Ui, comm packer.Communicator) (error, string) {
+func (p *Provisioner) setupAdapter(ui packer.Ui, comm packer.Communicator) (string, error) {
 	ui.Message("Setting up proxy adapter for Ansible....")
 
 	k, err := newUserKey(p.config.SSHAuthorizedKeyFile)
 	if err != nil {
-		return err, ""
+		return "", err
 	}
 
 	hostSigner, err := newSigner(p.config.SSHHostKeyFile)
 	if err != nil {
-		return fmt.Errorf("error creating host signer: %s", err), ""
+		return "", fmt.Errorf("error creating host signer: %s", err)
 	}
 
 	keyChecker := ssh.CertChecker{
@@ -291,7 +290,7 @@ func (p *Provisioner) setupAdapter(ui packer.Ui, comm packer.Communicator) (erro
 	}()
 
 	if err != nil {
-		return err, ""
+		return "", err
 	}
 
 	ui = &packer.SafeUi{
@@ -300,7 +299,7 @@ func (p *Provisioner) setupAdapter(ui packer.Ui, comm packer.Communicator) (erro
 	}
 	p.adapter = adapter.NewAdapter(p.done, localListener, config, p.config.SFTPCmd, ui, comm)
 
-	return nil, k.privKeyFile
+	return k.privKeyFile, nil
 }
 
 func (p *Provisioner) createInventoryFile(hostIP string, hostPort int) error {
@@ -359,18 +358,19 @@ func (p *Provisioner) Provision(ctx context.Context, ui packer.Ui, comm packer.C
 	}
 
 	// Set up proxy if there's no host IP to access, regardless of user config.
-	hostIP := generatedData["Host"]
+	hostIP := generatedData["Host"].(string)
+
 	if hostIP == "" && p.config.UseProxy.False() {
 		ui.Error("Warning: use_proxy is false, but instance does" +
 			" not have an IP address to give to Ansible. Falling back" +
 			" to use localhost proxy.")
-		p.config.UseProxy = confighelper.TriTrue
+		p.config.UseProxy = config.TriTrue
 	}
 
 	privKeyFile := ""
 	if !p.config.UseProxy.False() {
 		// We set up the proxy if useProxy is either true or unset.
-		err, privKeyFile := p.setupAdapterFunc(ui, comm)
+		privKeyFile, err := p.setupAdapterFunc(ui, comm)
 		if err != nil {
 			return err
 		}
@@ -391,23 +391,31 @@ func (p *Provisioner) Provision(ctx context.Context, ui packer.Ui, comm packer.C
 		ui.Message("Not using Proxy adapter for Ansible run...")
 	}
 
+	hostIP = "127.0.0.1"
+	hostPort := p.config.LocalPort
+	log.Printf("Megan did this 1: host and port are %s and %d", hostIP, hostPort)
 	if len(p.config.InventoryFile) == 0 {
-		if !p.config.UseProxy.False() {
-			err := p.createInventoryFile("127.0.0.1", p.config.LocalPort)
-			if err != nil {
-				return err
-			}
-		} else {
-			err := p.createInventoryFile(generatedData["Host"].(string),
-				int(generatedData["Port"].(int64)))
-			if err != nil {
-				return err
-			}
+		log.Printf("Megan did this 2: host and port are %s and %d", hostIP, hostPort)
+		if p.config.UseProxy.False() {
+			log.Printf("Megan did this 3: host and port are %s and %d", hostIP, hostPort)
+			// We aren't using a proxy, so we need to retrieve the
+			// host IP and port from generated data.
+			hostIP = generatedData["Host"].(string)
+			hostPort = int(generatedData["Port"].(int64))
 		}
+
+		log.Printf("Megan did this 4: host and port are %s and %d", hostIP, hostPort)
+		// Create the inventory file
+		err := p.createInventoryFile(hostIP, hostPort)
+		if err != nil {
+			return err
+		}
+
+		// Delete the generated inventory file
 		defer func() {
+			os.Remove(p.config.InventoryFile)
 			p.config.InventoryFile = ""
 		}()
-		defer os.Remove(p.config.InventoryFile)
 	}
 
 	if err := p.executeAnsibleFunc(ui, comm, privKeyFile); err != nil {

@@ -24,12 +24,12 @@ type provisionLogicTracker struct {
 	happyPath            bool
 }
 
-func (l *provisionLogicTracker) setupAdapter(ui packer.Ui, comm packer.Communicator) (error, string) {
+func (l *provisionLogicTracker) setupAdapter(ui packer.Ui, comm packer.Communicator) (string, error) {
 	l.setupAdapterCalled = true
 	if l.happyPath {
-		return nil, "fakeKeyString"
+		return "fakeKeyString", nil
 	}
-	return fmt.Errorf("chose sadpath"), ""
+	return "", fmt.Errorf("chose sadpath")
 }
 
 func (l *provisionLogicTracker) executeAnsible(ui packer.Ui, comm packer.Communicator, privKeyFile string) error {
