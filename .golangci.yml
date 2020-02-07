@@ -8,7 +8,7 @@ issues:
     # Exclude failing staticchecks for now
     - linters:
         - staticcheck
-      text: "SA[1006|1019|4006|4010|4017|5007|6005|9004]:"
+      text: "SA(1006|1019|4006|4010|4017|5007|6005|9004):"
     # Exclude lll issues for long lines with go:generate
     - linters:
         - lll
