@@ -79,6 +79,12 @@ lint: install-lint-deps ## Lint Go code
 		golangci-lint run ./...; \
 	fi
 
+lint-changed-dirs: install-lint-deps ## Lint modified Go code only
+	@git diff --dirstat=files,0 origin/master \
+		| awk '{print $$2}' | grep -v '^vendor'\
+		| xargs -n1 golangci-lint run
+
+
 fmt: ## Format Go code
 	@go fmt ./...
 
